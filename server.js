@@ -6,11 +6,15 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Environment Variables configured in Render
+// Only Admin Secret is required in Render Environment Variables
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'your-admin-secret';
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // GitHub Personal Access Token
-const GITHUB_OWNER = process.env.GITHUB_OWNER; // Your GitHub Username
-const GITHUB_REPO = process.env.GITHUB_REPO;   // Your Repository Name
+
+// In-memory config updated dynamically from the Admin Panel
+let gitHubConfig = {
+  token: null,
+  owner: null,
+  repo: null
+};
 
 // Generate standard license key format (XXXX-XXXX-XXXX-XXXX)
 function generateLicenseKey() {
@@ -20,15 +24,24 @@ function generateLicenseKey() {
 
 // Fetch keys.json from GitHub repository
 async function getKeysFromGitHub() {
-  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/keys.json`;
+  if (!gitHubConfig.token || !gitHubConfig.owner || !gitHubConfig.repo) {
+    throw new Error('GitHub configuration missing. Please enter your credentials in the Admin Panel.');
+  }
+
+  const url = `https://api.github.com/repos/${gitHubConfig.owner}/${gitHubConfig.repo}/contents/keys.json`;
   const response = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${GITHUB_TOKEN}`,
+      'Authorization': `Bearer ${gitHubConfig.token}`,
       'Accept': 'application/vnd.github+json',
       'User-Agent': 'Render-Key-Server'
     }
   });
-  if (!response.ok) return { keys: [], sha: null };
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`GitHub API Error: ${response.status} - ${errText}`);
+  }
+
   const data = await response.json();
   const content = Buffer.from(data.content, 'base64').toString('utf8');
   return { keys: JSON.parse(content), sha: data.sha };
@@ -36,13 +49,13 @@ async function getKeysFromGitHub() {
 
 // Save updated keys.json back to GitHub repository
 async function saveKeysToGitHub(keysArray, sha) {
-  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/keys.json`;
+  const url = `https://api.github.com/repos/${gitHubConfig.owner}/${gitHubConfig.repo}/contents/keys.json`;
   const content = Buffer.from(JSON.stringify(keysArray, null, 2)).toString('base64');
   
   const response = await fetch(url, {
     method: 'PUT',
     headers: {
-      'Authorization': `Bearer ${GITHUB_TOKEN}`,
+      'Authorization': `Bearer ${gitHubConfig.token}`,
       'Accept': 'application/vnd.github+json',
       'Content-Type': 'application/json',
       'User-Agent': 'Render-Key-Server'
@@ -53,7 +66,12 @@ async function saveKeysToGitHub(keysArray, sha) {
       sha: sha
     })
   });
-  return response.ok;
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`GitHub Save Error: ${response.status} - ${errText}`);
+  }
+  return true;
 }
 
 // -------------------------------------------------------------
@@ -62,8 +80,16 @@ async function saveKeysToGitHub(keysArray, sha) {
 app.post('/api/admin/generate', async (req, res) => {
   const authHeader = req.headers['authorization'];
   if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
-    return res.status(403).json({ error: 'Unauthorized' });
+    return res.status(403).json({ error: 'Unauthorized: Invalid Admin Secret' });
   }
+
+  const { token, owner, repo } = req.body;
+  if (!token || !owner || !repo) {
+    return res.status(400).json({ error: 'Please provide GitHub Token, Username, and Repo Name' });
+  }
+
+  // Update server configuration dynamically from the admin panel
+  gitHubConfig = { token, owner, repo };
 
   try {
     const { keys, sha } = await getKeysFromGitHub();
@@ -72,17 +98,13 @@ app.post('/api/admin/generate', async (req, res) => {
     const keyObj = {
       key: newKey,
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days validity
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
       isUsed: false,
       hardwareId: null
     };
 
     keys.push(keyObj);
-    const success = await saveKeysToGitHub(keys, sha);
-
-    if (!success) {
-      return res.status(500).json({ error: 'Failed to update GitHub repository' });
-    }
+    await saveKeysToGitHub(keys, sha);
 
     res.json({ message: 'Key generated successfully', key: newKey });
   } catch (err) {
@@ -107,12 +129,12 @@ app.post('/api/keys/verify', async (req, res) => {
 
     const keyData = keys[foundIndex];
 
-    // Check expiration date
+    // Check expiration
     if (new Date() > new Date(keyData.expiresAt)) {
       return res.status(403).json({ valid: false, message: 'Key Has Expired' });
     }
 
-    // Optional device locking
+    // Device binding check
     if (keyData.hardwareId && keyData.hardwareId !== hardwareId) {
       return res.status(403).json({ valid: false, message: 'Key bound to another device' });
     }
@@ -126,7 +148,7 @@ app.post('/api/keys/verify', async (req, res) => {
 
     res.json({ valid: true, message: 'Access Granted' });
   } catch (err) {
-    res.status(500).json({ valid: false, message: 'Verification error' });
+    res.status(500).json({ valid: false, message: err.message || 'Verification error' });
   }
 });
 
