@@ -12,5 +12,12 @@
     "expiresAt": "2026-10-26T13:37:33.530Z",
     "isRevoked": false,
     "hardwareId": null
+  },
+  {
+    "key": "676E-B5AC-2499-B400",
+    "createdAt": "2026-10-25T13:37:38.293Z",
+    "expiresAt": "2026-10-26T13:37:38.293Z",
+    "isRevoked": false,
+    "hardwareId": null
   }
 ]
