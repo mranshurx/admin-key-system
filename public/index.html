@@ -2,64 +2,383 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Key Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Admin Panel - License Manager</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #1e1e1e; padding: 25px; border-radius: 10px; width: 380px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        input, button { width: 100%; padding: 10px; margin-top: 8px; border-radius: 5px; border: none; box-sizing: border-box; }
-        input { background: #2c2c2c; color: #fff; font-size: 14px; }
-        button { background: #6200ee; color: #fff; font-weight: bold; cursor: pointer; margin-top: 15px; }
-        button:hover { background: #7c4dff; }
-        label { font-size: 12px; color: #b0bec5; margin-top: 10px; display: block; }
-        #keyDisplay { margin-top: 15px; font-family: monospace; font-size: 15px; color: #03dac6; word-break: break-all; text-align: center; }
+        :root {
+            --bg: #090a0f;
+            --card-bg: #13151f;
+            --border: #232738;
+            --primary: #7c3aed;
+            --primary-hover: #6d28d9;
+            --accent: #06b6d4;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --success: #10b981;
+            --text: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+
+        .container { width: 100%; max-width: 850px; }
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+
+        /* Login Screen */
+        #loginScreen { text-align: center; max-width: 400px; margin: 0 auto; }
+        #loginScreen h2 { margin-bottom: 8px; color: var(--accent); font-size: 24px; }
+        #loginScreen p { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+        .form-group { margin-bottom: 16px; text-align: left; }
+        label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        input, select { width: 100%; padding: 12px 14px; background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 15px; outline: none; transition: border 0.2s; }
+        input:focus, select:focus { border-color: var(--accent); }
+
+        button { width: 100%; padding: 12px; background: var(--primary); color: #fff; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s, transform 0.1s; font-size: 15px; margin-top: 10px; }
+        button:hover { background: var(--primary-hover); }
+        button:active { transform: scale(0.98); }
+
+        /* Dashboard Screen */
+        #dashboardScreen { display: none; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 25px; }
+        .header h1 { font-size: 22px; color: var(--accent); }
+        .badge { background: rgba(6, 182, 212, 0.15); color: var(--accent); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+        .config-box { background: rgba(35, 39, 56, 0.4); border: 1px solid var(--border); padding: 15px; border-radius: 10px; margin-bottom: 25px; display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+        @media(max-width: 768px) { .config-box { grid-template-columns: 1fr; } }
+
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .tab-btn { background: transparent; color: var(--text-muted); width: auto; padding: 8px 16px; margin: 0; font-size: 14px; border-radius: 6px; }
+        .tab-btn.active { background: var(--border); color: var(--text); font-weight: bold; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Key Generator Box */
+        .gen-box { text-align: center; padding: 20px; background: #0a0c12; border-radius: 10px; border: 1px dashed var(--border); }
+        #generatedKeyDisplay { font-family: monospace; font-size: 20px; color: var(--success); margin: 15px 0; word-break: break-all; }
+
+        /* Keys Table */
+        .table-responsive { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+        th { background: #181b26; color: var(--text-muted); font-weight: 600; position: sticky; top: 0; }
+        .status-active { color: var(--success); font-weight: 600; }
+        .status-revoked { color: var(--danger); font-weight: 600; }
+        
+        .action-btns { display: flex; gap: 6px; }
+        .btn-sm { padding: 6px 10px; font-size: 12px; width: auto; margin: 0; }
+        .btn-danger { background: var(--danger); }
+        .btn-danger:hover { background: var(--danger-hover); }
+        .btn-secondary { background: #374151; }
+        .btn-secondary:hover { background: #4b5563; }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: #fff; padding: 12px 20px; border-radius: 8px; border-left: 4px solid var(--accent); box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: none; z-index: 1000; font-size: 14px; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>Admin Key Panel</h2>
-        
-        <label>Admin Secret Password</label>
-        <input type="password" id="adminSecret" placeholder="Your Render Admin Secret">
 
-        <label>GitHub Personal Access Token</label>
-        <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx">
+    <div class="container">
+        <!-- LOGIN SCREEN -->
+        <div id="loginScreen" class="card">
+            <h2>CYBER ADMIN PORTAL</h2>
+            <p>Enter your Master Admin Key to unlock the panel</p>
+            <div class="form-group">
+                <label>Admin Key</label>
+                <input type="password" id="adminKeyInput" placeholder="-- ANSHU-BAAP">
+            </div>
+            <button onclick="loginAdmin()">Unlock Panel</button>
+        </div>
 
-        <label>GitHub Username (Owner)</label>
-        <input type="text" id="githubOwner" placeholder="Your GitHub Username">
+        <!-- DASHBOARD SCREEN -->
+        <div id="dashboardScreen" class="card">
+            <div class="header">
+                <h1>Cyber License Manager</h1>
+                <span class="badge">SYSTEM ONLINE</span>
+            </div>
 
-        <label>GitHub Repository Name</label>
-        <input type="text" id="githubRepo" placeholder="Your Repo Name">
+            <!-- GitHub Config Bar -->
+            <div class="config-box">
+                <div class="form-group" style="margin:0;">
+                    <label>GitHub Token</label>
+                    <input type="password" id="ghToken" placeholder="ghp_xxx">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>GitHub Owner</label>
+                    <input type="text" id="ghOwner" placeholder="Username">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Repository</label>
+                    <input type="text" id="ghRepo" placeholder="Repo Name">
+                </div>
+                <button onclick="saveConfig()" class="btn-sm" style="height: 44px; margin:0;">Save Config</button>
+            </div>
 
-        <button onclick="generateKey()">Generate New Key</button>
-        <div id="keyDisplay"></div>
+            <!-- Navigation Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('genTab', this)">Generate Keys</button>
+                <button class="tab-btn" onclick="switchTab('listTab', this); loadKeys();">Existing Keys</button>
+            </div>
+
+            <!-- TAB 1: GENERATE -->
+            <div id="genTab" class="tab-content active">
+                <div class="form-group">
+                    <label>License Validity Duration</label>
+                    <select id="keyDuration">
+                        <option value="1">1 Day</option>
+                        <option value="7">7 Days</option>
+                        <option value="30" selected>30 Days (1 Month)</option>
+                        <option value="90">90 Days (3 Months)</option>
+                        <option value="365">365 Days (1 Year)</option>
+                    </select>
+                </div>
+                <button onclick="generateKey()">Generate New Key</button>
+                
+                <div class="gen-box" style="margin-top: 20px;">
+                    <label>Newly Generated Key</label>
+                    <div id="generatedKeyDisplay">----</div>
+                    <button onclick="copyKey()" class="btn-sm btn-secondary" style="display:none; width: 150px; margin: 0 auto;" id="copyBtn">Copy Key</button>
+                </div>
+            </div>
+
+            <!-- TAB 2: EXISTING KEYS -->
+            <div id="listTab" class="tab-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="font-size: 16px; color: var(--text-muted);">Database Keys (`keys.json`)</h3>
+                    <button onclick="loadKeys()" class="btn-sm btn-secondary" style="width: auto; margin:0;">Refresh List</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Status</th>
+                                <th>Expires At</th>
+                                <th>Device Bound</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keysTableBody">
+                            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading keys...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <div id="toast" class="toast">Action successful!</div>
+
     <script>
-        async function generateKey() {
-            const secret = document.getElementById('adminSecret').value;
-            const token = document.getElementById('githubToken').value;
-            const owner = document.getElementById('githubOwner').value;
-            const repo = document.getElementById('githubRepo').value;
+        let adminSecret = '';
 
-            if (!secret || !token || !owner || !repo) {
-                alert('Please fill in all fields!');
-                return;
+        // Load saved config from localStorage if available
+        window.onload = () => {
+            document.getElementById('ghToken').value = localStorage.getItem('gh_token') || '';
+            document.getElementById('ghOwner').value = localStorage.getItem('gh_owner') || '';
+            document.getElementById('ghRepo').value = localStorage.getItem('gh_repo') || '';
+        };
+
+        function showToast(message) {
+            const t = document.getElementById('toast');
+            t.innerText = message;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 3000);
+        }
+
+        async function loginAdmin() {
+            const key = document.getElementById('adminKeyInput').value.trim();
+            if (!key) return alert('Please enter admin key');
+
+            try {
+                const res = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    adminSecret = key;
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('dashboardScreen').style.display = 'block';
+                    showToast('Panel unlocked successfully!');
+                } else {
+                    alert(data.error || 'Invalid Admin Key');
+                }
+            } catch (err) {
+                alert('Connection error');
             }
+        }
 
-            const res = await fetch('/api/admin/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${secret}`
-                },
-                body: JSON.stringify({ token, owner, repo })
-            });
+        async function saveConfig() {
+            const token = document.getElementById('ghToken').value.trim();
+            const owner = document.getElementById('ghOwner').value.trim();
+            const repo = document.getElementById('ghRepo').value.trim();
 
-            const data = await res.json();
-            if (res.ok) {
-                document.getElementById('keyDisplay').innerText = "Key: " + data.key;
-            } else {
-                alert(data.error || 'Failed to generate key');
+            if (!token || !owner || !repo) return alert('Fill in all GitHub fields');
+
+            localStorage.setItem('gh_token', token);
+            localStorage.setItem('gh_owner', owner);
+            localStorage.setItem('gh_repo', repo);
+
+            try {
+                const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminSecret}` 
+                    },
+                    body: JSON.stringify({ token, owner, repo })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('GitHub configuration saved!');
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) {
+                alert('Failed to save config');
+            }
+        }
+
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        async function generateKey() {
+            const durationDays = document.getElementById('keyDuration').value;
+            // Auto sync config first
+            await saveConfig();
+
+            try {
+                const res = await fetch('/api/admin/generate', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminSecret}` 
+                    },
+                    body: JSON.stringify({ durationDays })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('generatedKeyDisplay').innerText = data.key;
+                    document.getElementById('copyBtn').style.display = 'block';
+                    showToast('Key generated & committed to GitHub!');
+                } else {
+                    alert(data.error || 'Generation failed');
+                }
+            } catch (err) {
+                alert('Error generating key');
+            }
+        }
+
+        function copyKey() {
+            const keyText = document.getElementById('generatedKeyDisplay').innerText;
+            navigator.clipboard.writeText(keyText);
+            showToast('Key copied to clipboard!');
+        }
+
+        async function loadKeys() {
+            const tbody = document.getElementById('keysTableBody');
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Fetching keys from GitHub...</td></tr>`;
+
+            try {
+                const token = localStorage.getItem('gh_token');
+                const owner = localStorage.getItem('gh_owner');
+                const repo = localStorage.getItem('gh_repo');
+
+                const res = await fetch('/api/admin/keys', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminSecret}` 
+                    },
+                    body: JSON.stringify({ token, owner, repo })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    if (data.keys.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No keys found in keys.json</td></tr>`;
+                        return;
+                    }
+
+                    tbody.innerHTML = '';
+                    data.keys.forEach(k => {
+                        const isExpired = new Date() > new Date(k.expiresAt);
+                        let statusHtml = `<span class="status-active">Active</span>`;
+                        if (k.isRevoked) statusHtml = `<span class="status-revoked">Revoked</span>`;
+                        else if (isExpired) statusHtml = `<span class="status-revoked">Expired</span>`;
+
+                        tbody.innerHTML += `
+                            <tr>
+                                <td style="font-family: monospace; font-weight: bold;">${k.key}</td>
+                                <td>${statusHtml}</td>
+                                <td>${new Date(k.expiresAt).toLocaleDateString()}</td>
+                                <td>${k.hardwareId ? 'Bound' : 'Unbound'}</td>
+                                <td>
+                                    <div class="action-btns">
+                                        <button onclick="revokeKey('${k.key}')" class="btn-sm btn-secondary">Revoke</button>
+                                        <button onclick="deleteKey('${k.key}')" class="btn-sm btn-danger">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error: ${data.error}</td></tr>`;
+                }
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load keys</td></tr>`;
+            }
+        }
+
+        async function revokeKey(key) {
+            if (!confirm(`Are you sure you want to revoke key: ${key}?`)) return;
+            try {
+                const res = await fetch('/api/admin/revoke', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminSecret}` 
+                    },
+                    body: JSON.stringify({ key })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('Key revoked!');
+                    loadKeys();
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) {
+                alert('Error revoking key');
+            }
+        }
+
+        async function deleteKey(key) {
+            if (!confirm(`Are you permanentely deleting key: ${key}?`)) return;
+            try {
+                const res = await fetch('/api/admin/delete', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminSecret}` 
+                    },
+                    body: JSON.stringify({ key })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('Key deleted!');
+                    loadKeys();
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) {
+                alert('Error deleting key');
             }
         }
     </script>
