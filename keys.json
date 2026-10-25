@@ -5,5 +5,12 @@
     "expiresAt": "2026-11-24T13:30:04.756Z",
     "isUsed": false,
     "hardwareId": null
+  },
+  {
+    "key": "1969-118D-AF2B-4EA6",
+    "createdAt": "2026-10-25T13:37:33.530Z",
+    "expiresAt": "2026-10-26T13:37:33.530Z",
+    "isRevoked": false,
+    "hardwareId": null
   }
 ]
