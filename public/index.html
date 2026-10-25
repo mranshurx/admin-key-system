@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Key Panel</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #1e1e1e; padding: 30px; border-radius: 10px; width: 350px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        input, button { width: 100%; padding: 10px; margin-top: 15px; border-radius: 5px; border: none; box-sizing: border-box; }
+        input { background: #2c2c2c; color: #fff; }
+        button { background: #6200ee; color: #fff; font-weight: bold; cursor: pointer; }
+        button:hover { background: #7c4dff; }
+        #keyDisplay { margin-top: 15px; font-family: monospace; font-size: 16px; color: #03dac6; word-break: break-all; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Admin Key Generator</h2>
+        <input type="password" id="adminSecret" placeholder="Admin Secret Password">
+        <button onclick="generateKey()">Generate New Key</button>
+        <div id="keyDisplay"></div>
+    </div>
+
+    <script>
+        async function generateKey() {
+            const secret = document.getElementById('adminSecret').value;
+            const res = await fetch('/api/admin/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${secret}`
+                }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                document.getElementById('keyDisplay').innerText = data.key;
+            } else {
+                alert(data.error || 'Failed');
+            }
+        }
+    </script>
+</body>
+</html>
