@@ -6,10 +6,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Only Admin Secret is required in Render Environment Variables
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'your-admin-secret';
+// Hardcoded Admin Key
+const ADMIN_SECRET = '-- ANSHU-BAAP';
 
-// In-memory config updated dynamically from the Admin Panel
+// In-memory store for active GitHub configuration set via Admin Panel
 let gitHubConfig = {
   token: null,
   owner: null,
@@ -22,10 +22,10 @@ function generateLicenseKey() {
   return bytes.match(/.{1,4}/g).join('-');
 }
 
-// Fetch keys.json from GitHub repository
+// Fetch keys.json from GitHub
 async function getKeysFromGitHub() {
   if (!gitHubConfig.token || !gitHubConfig.owner || !gitHubConfig.repo) {
-    throw new Error('GitHub configuration missing. Please enter your credentials in the Admin Panel.');
+    throw new Error('GitHub configuration missing. Please save your credentials in the panel.');
   }
 
   const url = `https://api.github.com/repos/${gitHubConfig.owner}/${gitHubConfig.repo}/contents/keys.json`;
@@ -38,6 +38,9 @@ async function getKeysFromGitHub() {
   });
 
   if (!response.ok) {
+    if (response.status === 404) {
+      return { keys: [], sha: null };
+    }
     const errText = await response.text();
     throw new Error(`GitHub API Error: ${response.status} - ${errText}`);
   }
@@ -47,7 +50,7 @@ async function getKeysFromGitHub() {
   return { keys: JSON.parse(content), sha: data.sha };
 }
 
-// Save updated keys.json back to GitHub repository
+// Save keys.json to GitHub
 async function saveKeysToGitHub(keysArray, sha) {
   const url = `https://api.github.com/repos/${gitHubConfig.owner}/${gitHubConfig.repo}/contents/keys.json`;
   const content = Buffer.from(JSON.stringify(keysArray, null, 2)).toString('base64');
@@ -61,7 +64,7 @@ async function saveKeysToGitHub(keysArray, sha) {
       'User-Agent': 'Render-Key-Server'
     },
     body: JSON.stringify({
-      message: 'Admin: Generated new license key',
+      message: 'Admin Panel: Updated license keys',
       content: content,
       sha: sha
     })
@@ -74,46 +77,101 @@ async function saveKeysToGitHub(keysArray, sha) {
   return true;
 }
 
-// -------------------------------------------------------------
-// 1. ADMIN ENDPOINT: Generate Key & Commit to GitHub
-// -------------------------------------------------------------
-app.post('/api/admin/generate', async (req, res) => {
+// Middleware: Verify Admin Key
+function verifyAdmin(req, res, next) {
   const authHeader = req.headers['authorization'];
-  if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
-    return res.status(403).json({ error: 'Unauthorized: Invalid Admin Secret' });
+  if (authHeader !== `Bearer ${ADMIN_SECRET}` && authHeader !== `Bearer ANSHU-BAAP`) {
+    return res.status(403).json({ error: 'Unauthorized: Invalid Admin Key' });
   }
+  next();
+}
 
+// -------------------------------------------------------------
+// ADMIN ENDPOINTS
+// -------------------------------------------------------------
+
+// 1. Login Verification
+app.post('/api/admin/login', verifyAdmin, (req, res) => {
+  res.json({ success: true, message: 'Access Granted' });
+});
+
+// 2. Set GitHub Config
+app.post('/api/admin/config', verifyAdmin, (req, res) => {
   const { token, owner, repo } = req.body;
   if (!token || !owner || !repo) {
-    return res.status(400).json({ error: 'Please provide GitHub Token, Username, and Repo Name' });
+    return res.status(400).json({ error: 'All GitHub fields are required' });
   }
-
-  // Update server configuration dynamically from the admin panel
   gitHubConfig = { token, owner, repo };
+  res.json({ success: true, message: 'Configuration saved' });
+});
 
+// 3. Get All Keys
+app.post('/api/admin/keys', verifyAdmin, async (req, res) => {
   try {
-    const { keys, sha } = await getKeysFromGitHub();
+    const { keys } = await getKeysFromGitHub();
+    res.json({ keys });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Generate Key
+app.post('/api/admin/generate', verifyAdmin, async (req, res) => {
+  const { durationDays = 30 } = req.body;
+  try {
+    let { keys, sha } = await getKeysFromGitHub();
     const newKey = generateLicenseKey();
     
     const keyObj = {
       key: newKey,
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-      isUsed: false,
+      expiresAt: new Date(Date.now() + parseInt(durationDays) * 24 * 60 * 60 * 1000).toISOString(),
+      isRevoked: false,
       hardwareId: null
     };
 
     keys.push(keyObj);
     await saveKeysToGitHub(keys, sha);
 
-    res.json({ message: 'Key generated successfully', key: newKey });
+    res.json({ success: true, key: newKey });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Revoke Key
+app.post('/api/admin/revoke', verifyAdmin, async (req, res) => {
+  const { key } = req.body;
+  try {
+    let { keys, sha } = await getKeysFromGitHub();
+    const index = keys.findIndex(k => k.key === key);
+    if (index === -1) return res.status(404).json({ error: 'Key not found' });
+
+    keys[index].isRevoked = true;
+    await saveKeysToGitHub(keys, sha);
+    res.json({ success: true, message: 'Key revoked successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Delete Key
+app.post('/api/admin/delete', verifyAdmin, async (req, res) => {
+  const { key } = req.body;
+  try {
+    let { keys, sha } = await getKeysFromGitHub();
+    const filtered = keys.filter(k => k.key !== key);
+    if (filtered.length === keys.length) return res.status(404).json({ error: 'Key not found' });
+
+    await saveKeysToGitHub(filtered, sha);
+    res.json({ success: true, message: 'Key deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // -------------------------------------------------------------
-// 2. CLIENT ENDPOINT: Verify Key from APK
+// CLIENT APK VERIFICATION ENDPOINT
 // -------------------------------------------------------------
 app.post('/api/keys/verify', async (req, res) => {
   const { key, hardwareId } = req.body;
@@ -121,34 +179,33 @@ app.post('/api/keys/verify', async (req, res) => {
 
   try {
     const { keys, sha } = await getKeysFromGitHub();
-    const foundIndex = keys.findIndex(k => k.key === key);
+    const found = keys.find(k => k.key === key);
 
-    if (foundIndex === -1) {
+    if (!found) {
       return res.status(400).json({ valid: false, message: 'Invalid Key' });
     }
 
-    const keyData = keys[foundIndex];
-
-    // Check expiration
-    if (new Date() > new Date(keyData.expiresAt)) {
-      return res.status(403).json({ valid: false, message: 'Key Has Expired' });
+    if (found.isRevoked) {
+      return res.status(403).json({ valid: false, message: 'Key has been revoked' });
     }
 
-    // Device binding check
-    if (keyData.hardwareId && keyData.hardwareId !== hardwareId) {
+    if (new Date() > new Date(found.expiresAt)) {
+      return res.status(403).json({ valid: false, message: 'Key has expired' });
+    }
+
+    if (found.hardwareId && found.hardwareId !== hardwareId) {
       return res.status(403).json({ valid: false, message: 'Key bound to another device' });
     }
 
-    // Bind hardware ID on first use
-    if (!keyData.hardwareId && hardwareId) {
-      keys[foundIndex].hardwareId = hardwareId;
-      keys[foundIndex].isUsed = true;
+    // Bind hardware ID on first successful activation
+    if (!found.hardwareId && hardwareId) {
+      found.hardwareId = hardwareId;
       await saveKeysToGitHub(keys, sha);
     }
 
     res.json({ valid: true, message: 'Access Granted' });
   } catch (err) {
-    res.status(500).json({ valid: false, message: err.message || 'Verification error' });
+    res.status(500).json({ valid: false, message: 'Verification error' });
   }
 });
 
