@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "key": "1ABF-4BDA-E961-DF7D",
+    "createdAt": "2026-10-25T13:30:04.756Z",
+    "expiresAt": "2026-11-24T13:30:04.756Z",
+    "isUsed": false,
+    "hardwareId": null
+  }
+]
